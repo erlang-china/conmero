@@ -24,8 +24,8 @@
 %% ====================================================================
 -export([start/0, stop/0]).
 
-%%% conmero:call(record.call_info)
-%%% conmero:cast(record.call_info)
+%%% conmero:call(record.conmero_params)
+%%% conmero:cast(record.conmero_params)
 
 -export([call/1, cast/1]).
 
