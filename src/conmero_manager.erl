@@ -76,6 +76,9 @@ init([]) ->
 	Timeout :: non_neg_integer() | infinity,
 	Reason :: term().
 %% ====================================================================
+handle_call(load_config, _From, State) ->
+    Reply = load_config(),
+    {reply, Reply, State};
 handle_call(_Request, _From, State) ->
     Reply = ok,
     {reply, Reply, State}.
@@ -142,129 +145,147 @@ code_change(_OldVsn, State, _Extra) ->
 load_config()->
     {ok, Filename} = application:get_env(config),
     {ok, Terms}    = file:consult(Filename),
-    CallTypeList   = proplists:get_value(call_type, Terms),
+    CallAlgorithmTypeList   = proplists:get_value(call_algorithm_type, Terms),
     [begin
-         AppsList = proplists:get_value(CallType, Terms),
-         init_apps(CallType, Terms, AppsList)
+         AppsList = proplists:get_value(CallAlgorithmType, Terms),
+         init_apps(CallAlgorithmType, Terms, AppsList)
      end
-    || CallType<-CallTypeList].
+    || CallAlgorithmType<-CallAlgorithmTypeList].
 
-init_apps(_CallType,_Terms, [])->ok;
-init_apps(_CallType,_Terms, undefined)->ok;
-init_apps( CallType, Terms, AppsList)->
+init_apps(_CallAlgorithmType,_Terms, [])->ok;
+init_apps(_CallAlgorithmType,_Terms, undefined)->ok;
+init_apps( CallAlgorithmType, Terms, AppsList)->
     [begin 
          ServerNodes = proplists:get_value(App, Terms),
-         insert_app_into_ets(CallType, App, ServerNodes)
+         insert_app_into_ets(CallAlgorithmType, App, ServerNodes)
      end||App<-AppsList].
 
+insert_app_into_ets(CallAlgorithmType, App, ServerNodes)->
+    AppTableName = conmero_app_table:create_app_table(App),
+    AppInfo      = generate_app(CallAlgorithmType, App, ServerNodes),
 
-generate_app(_CallType,_NodeTableName, _App, undefined)->ok;
-generate_app(_CallType,_NodeTableName, _App, [])->ok;
-generate_app( general,  NodeTableName,  App, [ServerNode|T])->
+    ets:insert(AppTableName, AppInfo).
+
+
+generate_app(_CallAlgorithmType, App, undefined)->
+    #conmero_app_info{application = App};
+generate_app( CallAlgorithmType, App, [])->
+    generate_app(CallAlgorithmType, App, undefined);
+
+generate_app(direct, App, [ServerNode|T])->
     case proplists:get_value(id, ServerNode) of
         Id when Id=:=1->
-            AppConfig = generate_general_app(App, ServerNode),
-            ets:insert(NodeTableName,AppConfig);
+            generate_direct_app(App, ServerNode);
         _->
-            generate_app(general, NodeTableName, App, T)
+            generate_app(direct, App, T)
     end;
-generate_app(consistent, NodeTableName, App, [ServerNode|T])->
-    AppConfig = generate_consistent_app(App, ServerNode),
-    ets:insert(NodeTableName,AppConfig),
-    generate_app(consistent, NodeTableName, App, T).
+generate_app(consistent, App, ServerNodes)->
+    NodeTableName = conmero_app_table:create_node_table(App),
+    AppNodeConfig = generate_consistent_app_node(App, ServerNodes, []),
 
-generate_general_app(App, ServerNode)->
-    GenServerType = proplists:get_value(gen_server_type,ServerNode),
-    MasterNode    = proplists:get_value(master_node,    ServerNode),
-    SlaveNode     = proplists:get_value(slave_node,     ServerNode),
-    ServerName    = proplists:get_value(server_name,    ServerNode),
-    SourceTag     = proplists:get_value(source_tag,     ServerNode),
-    Timeout       = proplists:get_value(timeout,        ServerNode),
-    Status        = proplists:get_value(status,         ServerNode),
+    ets:insert(NodeTableName,AppNodeConfig),
     #conmero_app_info{
-                      application     = App,
-                      call_type       = general,
-                      gen_server_type = GenServerType,
-                      master_node     = MasterNode,
-                      slave_node      = SlaveNode,
-                      server_name     = ServerName,
-                      timeout         = Timeout,
-                      source_tag      = SourceTag,
-                      status          = Status}.
-generate_consistent_app(App, ServerNode)->
-    Id            = proplists:get_value(id, ServerNode),
-    GenServerType = proplists:get_value(gen_server_type,ServerNode),
-    MasterNode    = proplists:get_value(master_node,    ServerNode),
-    SlaveNode     = proplists:get_value(slave_node,     ServerNode),
-    ServerName    = proplists:get_value(server_name,    ServerNode),
-    VNodeNums     = proplists:get_value(v_node_num,     ServerNode),
-    HashBaseKey   = proplists:get_value(hash_base_key,  ServerNode),
-    SourceTag     = proplists:get_value(source_tag,     ServerNode),
-    Timeout       = proplists:get_value(timeout,        ServerNode),
-    Status        = proplists:get_value(status,         ServerNode),
-    
-    AppNode=
-    #conmero_app_info{
-                      id              = Id,
-                      application     = App,
-                      call_type       = consistent,
-                      gen_server_type = GenServerType,
-                      master_node     = MasterNode,
-                      slave_node      = SlaveNode,
-                      server_name     = ServerName,
-                      v_node_num      = VNodeNums,
-                      hash_base_key   = HashBaseKey,
-                      timeout         = Timeout,
-                      source_tag      = SourceTag,
-                      status          = Status},
-    
-    ConmeroNodes = make_nodes(Id, MasterNode, ServerName, VNodeNums, HashBaseKey, SourceTag, Timeout, Status),
-    TableName    = conmero_app_table:create_node_table(App),
-    insert_nodes_to_ets(TableName,ConmeroNodes),
-    
-    AppNode.
+        application         = App,
+        call_algorithm_type = 1}.
 
-make_nodes( Id, Node, ServerName, VNodeNums, HashBaseKey, SourceTag, Timeout, Status)
-  when is_integer(Id),is_atom(Node),is_atom(ServerName),
-       is_integer(VNodeNums),VNodeNums>0,is_list(SourceTag),is_integer(Timeout),is_atom(Status)->
-    make_nodes_1(Id,Node,ServerName,0,VNodeNums,HashBaseKey,SourceTag,Timeout,Status,[]);
-make_nodes(_Id,_Node,_ServerName,_VNodeNums,_HashBaseKey,_SourceTag,_Timeout,_Status)->
+generate_direct_app(App, ServerNode)->
+    ModSender       = proplists:get_value(mod_sender,      ServerNode),
+    MasterNode      = proplists:get_value(master_node,     ServerNode),
+    SlaveNodeTmp    = proplists:get_value(slave_node,      ServerNode),
+    Timeout         = proplists:get_value(timeout,         ServerNode),
+    NodeTag         = proplists:get_value(node_tag,        ServerNode),
+    NodeStatusTmp   = proplists:get_value(node_status,     ServerNode),
+    NodeSwitchTmp   = proplists:get_value(switch_to_slave, ServerNode),
+
+    NodeStatus      = get_int_TorF(NodeStatusTmp,online),
+    NodeSwitch      = get_int_TorF(NodeSwitchTmp,on),
+
+    {SyncFun,ASysnFun} = get_sender_functions(ModSender),
+    SlaveNode=
+    case SlaveNodeTmp of
+        undefined ->
+            MasterNode;
+        _->
+            SlaveNodeTmp
+    end,
+
+    #conmero_app_info{
+                        application         = App,
+                        call_algorithm_type = 0,
+                        master_node         = MasterNode,
+                        slave_node          = SlaveNode,
+                        sync_func           = SyncFun,
+                        async_func          = ASysnFun,
+                        timeout             = Timeout,
+                        switch_to_slave     = NodeSwitch,
+                        node_tag            = NodeTag,
+                        node_status         = NodeStatus}.
+
+generate_consistent_app_node(_App, [], AccOut)->AccOut;
+generate_consistent_app_node( App, [ServerNode|T], AccIn)->
+    Id              = proplists:get_value(id,              ServerNode),
+    ModSender       = proplists:get_value(mod_sender,      ServerNode),
+    MasterNode      = proplists:get_value(master_node,     ServerNode),
+    SlaveNodeTmp    = proplists:get_value(slave_node,      ServerNode),
+    Timeout         = proplists:get_value(timeout,         ServerNode),
+    VNodeNums       = proplists:get_value(v_node_num,      ServerNode),
+    HashBaseKey     = proplists:get_value(hash_base_key,   ServerNode),
+    NodeTag         = proplists:get_value(node_tag,        ServerNode),
+    NodeStatusTmp   = proplists:get_value(node_status,     ServerNode),
+    NodeSwitchTmp   = proplists:get_value(switch_to_slave, ServerNode),
+
+    NodeStatus      = get_int_TorF(NodeStatusTmp,online),
+    NodeSwitch      = get_int_TorF(NodeSwitchTmp,on),
+
+    SlaveNode=
+    case SlaveNodeTmp of
+        undefined ->
+            MasterNode;
+        _->
+            SlaveNodeTmp
+    end,
+
+    ConmeroNodes =
+        make_nodes(App, Id, ModSender, MasterNode, SlaveNode, NodeSwitch, Timeout, VNodeNums, HashBaseKey, NodeTag, NodeStatus),
+    generate_consistent_app_node(App, T, lists:append([ConmeroNodes,AccIn])).
+
+get_int_TorF( F, S) when F=:=S->1;
+get_int_TorF(_F,_S) ->0.
+
+make_nodes( App, Id, ModSender, MasterNode, SlaveNode, NodeSwitch, Timeout, VNodeNums, HashBaseKey, NodeTag, NodeStatus)
+  when is_atom(App),is_integer(Id),is_integer(NodeSwitch),is_integer(Timeout),is_integer(VNodeNums),VNodeNums>0,is_list(NodeTag),is_integer(NodeStatus)->
+    make_nodes_1(App,Id,ModSender,MasterNode,SlaveNode,NodeSwitch,Timeout,0,VNodeNums,HashBaseKey,NodeTag,NodeStatus,[]);
+make_nodes(_App,_Id,_ModSender,_MasterNode,_SlaveNode,_NodeSwitch,_Timeout,_VNodeNums,_HashBaseKey,_NodeTag,_NodeStatus)->
     [].
-    
-make_nodes_1(_Id,_Node,_ServerName,_BaseVNode, 0,_HashBaseKey,_SourceTag,_Timeout,_Status, AccOut)-> AccOut;
-make_nodes_1(_Id,_Node,_ServerName, BaseVNode, VNodeId,_HashBaseKey,_SourceTag,_Timeout,_Status, AccOut) 
+
+make_nodes_1(_App,_Id,_ModSender,_MasterNode,_SlaveNode,_NodeSwitch,_Timeout,_BaseVNode, 0,        _HashBaseKey,_NodeTag,_NodeStatus, AccOut)-> AccOut;
+make_nodes_1(_App,_Id,_ModSender,_MasterNode,_SlaveNode,_NodeSwitch,_Timeout, BaseVNode, VNodeId,_HashBaseKey,_NodeTag,_NodeStatus, AccOut) 
   when BaseVNode==VNodeId -> AccOut;
-make_nodes_1( Id, Node, ServerName, BaseVNode, VNodeId, HashBaseKey, SourceTag, Timeout, Status, AccOut)->
-    Key     = io_lib:format("~s:~b",[HashBaseKey,VNodeId]),
-    KeyHash = get_key_hash(Key),
-    NodeRec = #conmero_node{
-                            id          = Id,
-                            v_node_id   = VNodeId,
-                            node        = Node,
-                            server_name = ServerName,
-                            timeout     = 1000,
-                            hash        = KeyHash,
-                            status      = Status,
-                            source_tag  = SourceTag},
-    make_nodes_1(Id,Node,ServerName,BaseVNode,VNodeId-1,HashBaseKey,SourceTag,Timeout,Status,[NodeRec|AccOut]).
+make_nodes_1( App, Id, ModSender, MasterNode, SlaveNode, NodeSwitch, Timeout, BaseVNode, VNodeId, HashBaseKey, NodeTag, NodeStatus, AccOut)->
 
-insert_app_into_ets(general, App, ServerNodes)->
-    NodeTableName=conmero_app_table:create_app_table(App),
-    generate_app(general, NodeTableName, App, ServerNodes);
-insert_app_into_ets(consistent, App, ServerNodes)->
-    NodeTableName=conmero_app_table:create_app_table(App),
-    generate_app(consistent, NodeTableName, App, ServerNodes).
-
-
-insert_nodes_to_ets(_TableName,[])->ok;
-insert_nodes_to_ets( TableName,[NodeRec|T])
-  when is_record(NodeRec,conmero_node)->
-    ets:insert(TableName,NodeRec),
-    insert_nodes_to_ets(TableName,T).
+    Key                = io_lib:format("~s:~b",[HashBaseKey,VNodeId]),
+    KeyHash            = get_key_hash(Key),
+    {SyncFun,ASysnFun} = get_sender_functions(ModSender),
+    NodeRec = #conmero_app_node{
+                    id              = Id,
+                    application     = App,
+                    sync_func       = SyncFun,
+                    async_func      = ASysnFun,
+                    master_node     = MasterNode,
+                    slave_node      = SlaveNode,
+                    timeout         = Timeout,
+                    switch_to_slave = NodeSwitch,
+                    v_node_id       = VNodeId,
+                    hash_index      = KeyHash,
+                    node_tag        = NodeTag,
+                    node_status     = NodeStatus},
+    make_nodes_1(App, Id, ModSender, MasterNode, SlaveNode, NodeSwitch, Timeout, BaseVNode, VNodeId-1, HashBaseKey, NodeTag, NodeStatus, [NodeRec|AccOut]).
 
 
-
-
+get_sender_functions([])->get_sender_functions(undefined);
+get_sender_functions(undefined)->{undefined,undefined};
+get_sender_functions(Sender)->
+    {fun Sender:call/3,fun Sender:cast/2}.
 
 
 get_key_hash(Key)->

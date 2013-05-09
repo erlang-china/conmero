@@ -100,7 +100,7 @@ handle_call({create_node_table,Application}, _From, State) ->
     NewState  =
         case create_ets_table(TableName,[{mode,append}], 
                               [public, ordered_set, named_table,
-                               {keypos,#conmero_node.hash},
+                               {keypos,#conmero_app_node.hash_index},
                                {read_concurrency,true}]) of
             {new,TableName}->
                 [TableName|State];

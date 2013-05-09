@@ -23,8 +23,11 @@
 %% API functions
 %% ====================================================================
 -export([start/0, stop/0]).
--export([call/2,call/3,
-         cast/2, cast/3]).
+
+%%% conmero:call(record.call_info)
+%%% conmero:cast(record.call_info)
+
+-export([call/1, cast/1]).
 
 start()->
     application:start(conmero).
@@ -32,57 +35,133 @@ start()->
 stop()->
     application:stop(conmero).
 
-call(Application, Message)->
-    call(Application, "", Message).
-call(Application, HashKey, Message) when is_atom(Application)->
-    send(call, Application, HashKey, Message).
+call( Info) when is_record(Info,conmero_params)->
+    send(call, Info);
+call(_Info)->
+    {error,bad_arg}.
 
-cast(Application, Message)->
-    cast(Application, "", Message).
-cast(Application, HashKey, Message) when is_atom(Application)->
-    send(cast, Application, HashKey, Message).
+cast( Info) when is_record(Info,conmero_params)->
+    send(cast, Info);
+cast(_Info)->
+    {error,bad_arg}.
+
+
 
 %% ====================================================================
 %% Internal functions
 %% ====================================================================
-send(Type, Application, HashKey, Message)->
+send(CallType,Info)->
+    #conmero_params {
+                application  = App,
+                message      = Msg,
+                hashkey      = HashKey,
+                specify_type = SpecfyType}
+        = Info,
+    send(CallType, App, HashKey, Msg, SpecfyType).
+
+send(CallType, App, HashKey, Msg, SpecfyType) when is_atom(App)->
+    AppInfo = get_app_info(App),
+    send_to_server(CallType, AppInfo, HashKey, Msg, SpecfyType);
+
+send(_Type,_App,_HashKey,_Msg,_SpecfyType)->
+    {error, valid_app}.
+
+get_app_info(App)->
+    TableName = list_to_atom(lists:concat([?ETS_APPS_PREFIX, App])),
+    hd(ets:select(TableName,get_online_app_config(App))).
+
+send_to_server(CallType, AppInfo, HashKey, Msg, SpecfyType) when is_record(AppInfo,conmero_app_info)->
+
+    case AppInfo#conmero_app_info.call_algorithm_type of
+        0->
+            send_to_direct_server(CallType, AppInfo, Msg, SpecfyType);
+        1->
+            send_to_consistent_server(CallType, AppInfo, HashKey, Msg, SpecfyType)
+    end;
+send_to_server(_CallType,_AppInfo,_HashKey,_Msg,_SpecfyType)->
+    {error,no_app_info}.
+
+get_specify_node(_CallType, undefined,  undefined)->{error,node_error};
+get_specify_node(undefined, MasterNode, SlaveNode)->{MasterNode, SlaveNode};
+get_specify_node(master,    undefined, _SlaveNode)->{error,node_error};
+get_specify_node(master,    MasterNode,_SlaveNode)->MasterNode;
+get_specify_node(slave,     MasterNode, undefined)->MasterNode;
+get_specify_node(slave,    _MasterNode, SlaveNode)->SlaveNode.
+
+
+send_to_direct_server(CallType, AppInfo, Msg, SpecfyType)->
+    #conmero_app_info{
+                    sync_func           = SyncFunc,
+                    async_func          = ASyncFunc,
+                    master_node         = MasterNode,
+                    slave_node          = SlaveNode,
+                    timeout             = Timeout,
+                    switch_to_slave     = Switch}
+        = AppInfo,
+    call_node_server(Switch, CallType, SyncFunc, ASyncFunc, MasterNode, SlaveNode, Msg, SpecfyType, Timeout).
+
+send_to_consistent_server(CallType, AppInfo, HashKey, Msg, SpecfyType)->
+    case get_consistent_node(AppInfo#conmero_app_info.application, HashKey) of
+        {ok,FinalAppNode} ->
+            #conmero_app_node{
+                            sync_func           = SyncFunc,
+                            async_func          = ASyncFunc,
+                            master_node         = MasterNode,
+                            slave_node          = SlaveNode,
+                            timeout             = Timeout,
+                            switch_to_slave     = Switch
+                            }
+                = FinalAppNode,
+            call_node_server(Switch, CallType, SyncFunc, ASyncFunc, MasterNode, SlaveNode, Msg, SpecfyType, Timeout);
+        {error,Reason} ->
+            {error,Reason}
+    end.
+
+call_node_server(Switch, CallType, SyncFunc, ASyncFunc, MasterNode, SlaveNode, Msg, SpecfyType, Timeout)->
+    case get_specify_node(SpecfyType, MasterNode, SlaveNode) of
+        {error, Type} ->
+            {error,Type};
+        {MasterNode, SlaveNode} ->
+            switch_server(Switch, CallType, SyncFunc, ASyncFunc, MasterNode, SlaveNode, Msg, Timeout);
+        CallingNode->
+            calling_server(CallType, SyncFunc, ASyncFunc, CallingNode, Msg, Timeout)
+    end.
+
+switch_server(0, CallType, SyncFunc, ASyncFunc, MasterNode,_SlaveNode, Msg, Timeout)->
+    case calling_server(CallType, SyncFunc, ASyncFunc, MasterNode, Msg, Timeout) of
+        {error,Reason}->
+            {error,Reason};
+        Return->
+            Return
+    end;
+switch_server(1, CallType, SyncFunc, ASyncFunc, MasterNode, SlaveNode, Msg, Timeout)->
+    case calling_server(CallType, SyncFunc, ASyncFunc, MasterNode, Msg, Timeout) of
+        {ok,Ret}->
+            {ok,Ret};
+        {_E,_R}->
+            calling_server(CallType, SyncFunc, ASyncFunc, SlaveNode, Msg, Timeout);
+        _Error->
+            calling_server(CallType, SyncFunc, ASyncFunc, SlaveNode, Msg, Timeout)
+    end.
+
+calling_server(call, SyncFunc,_ASyncFunc, CallingNode, Msg, Timeout)->
     try
-        case get_app_info(Application) of
-            AppInfo when is_record(AppInfo, conmero_app_info)->
-                send_to_server(Type, AppInfo, HashKey, Message);
-            _->
-                {error,no_app_info}
+        case SyncFunc(CallingNode, Msg, Timeout) of
+            {ok,Ret}->
+                {ok,Ret};
+            {ExecE,ExecR}->
+                {error,{ExecE,ExecR}}
         end
     catch
-        E:R->
-            {E,R}
-    end.
+        TryE:TryR->
+            {error,{TryE,TryR}}
+    end;
+calling_server(cast,_SyncFunc, ASyncFunc, CallingNode, Msg,_Timeout)->
+    ASyncFunc(CallingNode, Msg).
 
 
-send_to_server(Type, AppInfo, HashKey, Message)->
-    #conmero_app_info{
-                        application     = Application,
-                        call_type       = CallType,
-                        gen_server_type = GenServerType,
-                        timeout         = Timeout,
-                        master_node     = MasterNode,
-                        server_name     = ServerName}
-                        = AppInfo,
-    case CallType of
-        general->
-            send_to_server(GenServerType, Type, MasterNode, ServerName, Message, Timeout);
-        consistent->
-            {ok,FinalApplicationNode} = get_consistent_node(Application, HashKey),
-            #conmero_node{
-                        node        = ConNode,
-                        server_name = ConServerName,
-                        timeout     = ConTimeout
-                     } = FinalApplicationNode,
-            send_to_server(GenServerType, Type, ConNode, ConServerName, Message, ConTimeout)
-    end.
-
-get_consistent_node(Application,Key)->
-    TableName = get_node_table_name(Application),
+get_consistent_node(App,Key)->
+    TableName = get_node_table_name(App),
     case conmero_app_table:is_exist_ets_table(TableName) of
         true->
             KeyHash = conmero_manager:get_key_hash(Key),
@@ -93,34 +172,25 @@ get_consistent_node(Application,Key)->
             {error,get_node_failed}
     end.
 
-get_node_table_name(Application)->
-    case get({conmero, node_info, Application}) of
+get_node_table_name(App)->
+    case get({conmero, node_info, App}) of
         undefined->
-            TableName = list_to_atom(lists:concat([?ETS_NODES_PREFIX, Application])),
-            put({conmero, node_info, Application}, TableName),
+            TableName = list_to_existing_atom(lists:concat([?ETS_NODES_PREFIX, App])),
+            put({conmero, node_info, App}, TableName),
             TableName;
         TableName->
             TableName
     end.
 
-get_app_info(Application)->
-    TableName=
-    case get({conmero,app_info,Application}) of
-        undefined->
-            TableNameTmp = list_to_atom(lists:concat([?ETS_APPS_PREFIX, Application])),
-            put({conmero, app_info, Application}, TableNameTmp),
-            TableNameTmp;
-        TableNameTmp->
-            TableNameTmp
-    end,
-    hd(ets:lookup(TableName, Application)).
 
 get_final_online_node(TableName, KeyHash)->
     case ets:select(TableName, get_online_node_match_spec(KeyHash), 1) of
         {[MatchedNode],_Continuation} ->
             {ok, MatchedNode};
         '$end_of_table'->
-            get_default_online_node(TableName)
+            get_default_online_node(TableName);
+        _->
+            {error,get_node_failed}
     end.
 
 get_default_online_node(TableName)->
@@ -131,35 +201,59 @@ get_default_online_node(TableName)->
             {error,no_node_online}
     end.
 
+get_online_app_config(App)->
+    [{
+        #conmero_app_info{
+                application         = '$1',
+                call_algorithm_type = '_',
+                sync_func           = '_',
+                async_func          = '_',
+                master_node         = '_',
+                slave_node          = '_',
+                timeout             = '_',
+                switch_to_slave     = '_',
+                v_node_nums         = '_',
+                hash_base_key       = '_',
+                node_tag            = '_',
+                node_status         = '$2'},
+        [{'==','$1',App},{'==','$2',1}],
+        ['$_']
+    }].
+
 get_online_node_match_spec(KeyHash)->
-    [{#conmero_node{id = '_', v_node_id = '_', node = '_', server_name = '_',
-                    hash = '$1', status = '$2', source_tag='_'},
-    [{'==','$2',online},{'>','$1',KeyHash}],
+    [{
+        #conmero_app_node{
+                id                  = '_',
+                application         = '_',
+                sync_func           = '_',
+                async_func          = '_',
+                master_node         = '_',
+                slave_node          = '_',
+                timeout             = '_',
+                switch_to_slave     = '_',
+                v_node_id           = '_',
+                hash_index          = '$1',
+                node_tag            = '_',
+                node_status         = '$2'},
+    [{'==','$2',1},{'>','$1',KeyHash}],
     ['$_']}].
 
 get_whole_online_nodes_match_spec()->
-    [{#conmero_node{id = '_', v_node_id = '_', node = '_', server_name = '_',
-                    hash = '_', status = '$2', source_tag='_'},
-    [{'==','$2',online}],
+    [{
+        #conmero_app_node{
+                id                  = '_',
+                application         = '_',
+                sync_func           = '_',
+                async_func          = '_',
+                master_node         = '_',
+                slave_node          = '_',
+                timeout             = '_',
+                switch_to_slave     = '_',
+                v_node_id           = '_',
+                hash_index          = '_',
+                node_tag            = '_',
+                node_status         = '$2'},
+    [{'==','$2',1}],
     ['$_']}].
-
-
-send_to_server(1, Type, MasterNode, ServerName, Message, Timeout)->
-    send_to_gen_server(Type, MasterNode, ServerName, Message, Timeout);
-send_to_server(2, Type, MasterNode, ServerName, Message, Timeout)->
-    send_to_gen_server2(Type, MasterNode, ServerName, Message, Timeout).
-
-send_to_gen_server(call, Node, ServerName, Message, Timeout)->
-    gen_server:call({ServerName, Node}, Message, Timeout);
-send_to_gen_server(cast, Node, ServerName, Message,_Timeout)->
-    gen_server:cast({ServerName, Node}, Message).
-
-send_to_gen_server2(call, Node, ServerName, Message, Timeout)->
-    gen_server2:call({ServerName, Node}, Message, Timeout);
-send_to_gen_server2(cast, Node, ServerName, Message,_Timeout)->
-    gen_server2:cast({ServerName, Node}, Message).
-
-
-
 
 

@@ -10,19 +10,21 @@ deps:
 	@$(REBAR) get-deps
 
 compile:
+	@cp etc/conmero.config /etc/conmero.config
 	@$(REBAR) compile
 
 clean:
+	@rm -vf /etc/conmero.config
 	@$(REBAR) clean
 
 doc:
 	@$(REBAR) skip_deps=true doc
 
 console: compile
-	@erl -sname conmero -pa ebin ../gen_server2/ebin/ -boot start_sasl -s conmero
+	@erl -sname conmero -pa ebin ./deps/gen_server2/ebin/ -boot start_sasl -s conmero
 
 win_console: compile
-	@werl -sname conmero -pa ebin ../gen_server2/ebin/ -boot start_sasl -s conmero
+	@werl -sname conmero -pa ebin ./deps/gen_server2/ebin/ -boot start_sasl -s conmero
 
 
 check_plt: compile

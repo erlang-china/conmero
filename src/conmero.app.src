@@ -22,6 +22,6 @@
         {registered,[conmero]},
         {applications, [ kernel, stdlib ]},
         {mod, {conmero_app, []}},
-        {env,[{config,"etc/conmero.config"}]}
+        {env,[{config,"/etc/conmero.config"}]}
     ]
 }.
