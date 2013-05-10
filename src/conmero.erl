@@ -28,6 +28,7 @@
 %%% conmero:cast(record.conmero_params)
 
 -export([call/1, cast/1]).
+-export([per_get_node_info/2]).
 
 start()->
     application:start(conmero).
@@ -45,7 +46,8 @@ cast( Info) when is_record(Info,conmero_params)->
 cast(_Info)->
     {error,bad_arg}.
 
-
+per_get_node_info(Application,Key) when is_atom(Application)->
+    {ok,get_node_tag(Application,Key)}.
 
 %% ====================================================================
 %% Internal functions
@@ -67,7 +69,15 @@ send(_Type,_App,_HashKey,_Msg,_SpecfyType)->
     {error, valid_app}.
 
 get_app_info(App)->
-    TableName = list_to_atom(lists:concat([?ETS_APPS_PREFIX, App])),
+    TableName =
+    case get({conmero, app_info, App}) of
+        undefined->
+            TableNameTmp = list_to_atom(lists:concat([?ETS_APPS_PREFIX, App])),
+            put({conmero, app_info, App}, TableNameTmp),
+            TableNameTmp;
+        TableNameTmp->
+            TableNameTmp
+    end,
     hd(ets:select(TableName,get_online_app_config(App))).
 
 send_to_server(CallType, AppInfo, HashKey, Msg, SpecfyType) when is_record(AppInfo,conmero_app_info)->
@@ -175,7 +185,7 @@ get_consistent_node(App,Key)->
 get_node_table_name(App)->
     case get({conmero, node_info, App}) of
         undefined->
-            TableName = list_to_existing_atom(lists:concat([?ETS_NODES_PREFIX, App])),
+            TableName = list_to_atom(lists:concat([?ETS_NODES_PREFIX, App])),
             put({conmero, node_info, App}, TableName),
             TableName;
         TableName->
@@ -200,6 +210,27 @@ get_default_online_node(TableName)->
         '$end_of_table'->
             {error,no_node_online}
     end.
+
+get_node_tag(Application,Key)->
+    AppInfo = get_app_info(Application),
+    case get_app_info(Application) of 
+        AppInfo when is_record(AppInfo,conmero_app_info)->
+            case AppInfo#conmero_app_info.call_algorithm_type of
+                0->AppInfo#conmero_app_info.node_tag;
+                1->
+                    KeyHash   = conmero_manager:get_key_hash(Key),
+                    TableName = get_node_table_name(Application),
+                    case get_final_online_node(TableName,KeyHash) of
+                        {ok,MatchedNode}->
+                            MatchedNode#conmero_app_info.node_tag;
+                        {error, _Reason}->
+                            #conmero_app_info.node_tag
+                    end
+            end;
+        _ ->
+            #conmero_app_info.node_tag
+    end.
+
 
 get_online_app_config(App)->
     [{
