@@ -28,7 +28,7 @@
 %%% conmero:cast(record.conmero_params)
 
 -export([call/1, cast/1]).
--export([per_get_node_info/2]).
+-export([get_calling_node_tag/2]).
 
 start()->
     application:start(conmero).
@@ -46,8 +46,10 @@ cast( Info) when is_record(Info,conmero_params)->
 cast(_Info)->
     {error,bad_arg}.
 
-per_get_node_info(Application,Key) when is_atom(Application)->
-    {ok,get_node_tag(Application,Key)}.
+get_calling_node_tag( Application, Key) when is_atom(Application)->
+    get_node_tag(Application,Key);
+get_calling_node_tag(_Application,_Key)->
+    {error,bad_arg}.
 
 %% ====================================================================
 %% Internal functions
@@ -212,23 +214,22 @@ get_default_online_node(TableName)->
     end.
 
 get_node_tag(Application,Key)->
-    AppInfo = get_app_info(Application),
     case get_app_info(Application) of 
         AppInfo when is_record(AppInfo,conmero_app_info)->
             case AppInfo#conmero_app_info.call_algorithm_type of
-                0->AppInfo#conmero_app_info.node_tag;
+                0->{ok, AppInfo#conmero_app_info.node_tag};
                 1->
                     KeyHash   = conmero_manager:get_key_hash(Key),
                     TableName = get_node_table_name(Application),
                     case get_final_online_node(TableName,KeyHash) of
                         {ok,MatchedNode}->
-                            MatchedNode#conmero_app_info.node_tag;
-                        {error, _Reason}->
-                            #conmero_app_info.node_tag
+                            {ok, MatchedNode#conmero_app_node.node_tag};
+                        {error, Reason}->
+                            {error,Reason}
                     end
             end;
         _ ->
-            #conmero_app_info.node_tag
+            {error,get_app_faild}
     end.
 
 
