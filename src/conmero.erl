@@ -158,12 +158,7 @@ switch_server(1, CallType, SyncFunc, ASyncFunc, MasterNode, SlaveNode, Msg, Time
 
 calling_server(call, SyncFunc,_ASyncFunc, CallingNode, Msg, Timeout)->
     try
-        case SyncFunc(CallingNode, Msg, Timeout) of
-            {ok,Ret}->
-                {ok,Ret};
-            {ExecE,ExecR}->
-                {error,{ExecE,ExecR}}
-        end
+        {ok,SyncFunc(CallingNode, Msg, Timeout)}
     catch
         TryE:TryR->
             {error,{TryE,TryR}}
