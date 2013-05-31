@@ -17,7 +17,7 @@
 
 -module(conmero).
 
--include("../include/conmero.hrl").
+-include("conmero.hrl").
 
 %% ====================================================================
 %% API functions
