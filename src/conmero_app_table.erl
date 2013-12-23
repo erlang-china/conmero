@@ -53,13 +53,13 @@ is_exist_ets_table(TableName)->
 %% ====================================================================
 %% @doc <a href="http://www.erlang.org/doc/man/gen_server.html#Module:init-1">gen_server:init/1</a>
 -spec init(Args :: term()) -> Result when
-	Result :: {ok, State}
-			| {ok, State, Timeout}
-			| {ok, State, hibernate}
-			| {stop, Reason :: term()}
-			| ignore,
-	State :: term(),
-	Timeout :: non_neg_integer() | infinity.
+    Result :: {ok, State}
+            | {ok, State, Timeout}
+            | {ok, State, hibernate}
+            | {stop, Reason :: term()}
+            | ignore,
+    State :: term(),
+    Timeout :: non_neg_integer() | infinity.
 %% ====================================================================
 init([]) ->
     {ok, #state{}}.
@@ -69,18 +69,18 @@ init([]) ->
 %% ====================================================================
 %% @doc <a href="http://www.erlang.org/doc/man/gen_server.html#Module:handle_call-3">gen_server:handle_call/3</a>
 -spec handle_call(Request :: term(), From :: {pid(), Tag :: term()}, State :: term()) -> Result when
-	Result :: {reply, Reply, NewState}
-			| {reply, Reply, NewState, Timeout}
-			| {reply, Reply, NewState, hibernate}
-			| {noreply, NewState}
-			| {noreply, NewState, Timeout}
-			| {noreply, NewState, hibernate}
-			| {stop, Reason, Reply, NewState}
-			| {stop, Reason, NewState},
-	Reply :: term(),
-	NewState :: term(),
-	Timeout :: non_neg_integer() | infinity,
-	Reason :: term().
+    Result :: {reply, Reply, NewState}
+            | {reply, Reply, NewState, Timeout}
+            | {reply, Reply, NewState, hibernate}
+            | {noreply, NewState}
+            | {noreply, NewState, Timeout}
+            | {noreply, NewState, hibernate}
+            | {stop, Reason, Reply, NewState}
+            | {stop, Reason, NewState},
+    Reply :: term(),
+    NewState :: term(),
+    Timeout :: non_neg_integer() | infinity,
+    Reason :: term().
 %% ====================================================================
 handle_call({create_app_table, Application}, _From, State) ->
     TableName = priv_get_app_table_name(Application),
@@ -118,12 +118,12 @@ handle_call(_Request, _From, State) ->
 %% ====================================================================
 %% @doc <a href="http://www.erlang.org/doc/man/gen_server.html#Module:handle_cast-2">gen_server:handle_cast/2</a>
 -spec handle_cast(Request :: term(), State :: term()) -> Result when
-	Result :: {noreply, NewState}
-			| {noreply, NewState, Timeout}
-			| {noreply, NewState, hibernate}
-			| {stop, Reason :: term(), NewState},
-	NewState :: term(),
-	Timeout :: non_neg_integer() | infinity.
+    Result :: {noreply, NewState}
+            | {noreply, NewState, Timeout}
+            | {noreply, NewState, hibernate}
+            | {stop, Reason :: term(), NewState},
+    NewState :: term(),
+    Timeout :: non_neg_integer() | infinity.
 %% ====================================================================
 handle_cast(_Msg, State) ->
     {noreply, State}.
@@ -133,12 +133,12 @@ handle_cast(_Msg, State) ->
 %% ====================================================================
 %% @doc <a href="http://www.erlang.org/doc/man/gen_server.html#Module:handle_info-2">gen_server:handle_info/2</a>
 -spec handle_info(Info :: timeout | term(), State :: term()) -> Result when
-	Result :: {noreply, NewState}
-			| {noreply, NewState, Timeout}
-			| {noreply, NewState, hibernate}
-			| {stop, Reason :: term(), NewState},
-	NewState :: term(),
-	Timeout :: non_neg_integer() | infinity.
+    Result :: {noreply, NewState}
+            | {noreply, NewState, Timeout}
+            | {noreply, NewState, hibernate}
+            | {stop, Reason :: term(), NewState},
+    NewState :: term(),
+    Timeout :: non_neg_integer() | infinity.
 %% ====================================================================
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -148,10 +148,10 @@ handle_info(_Info, State) ->
 %% ====================================================================
 %% @doc <a href="http://www.erlang.org/doc/man/gen_server.html#Module:terminate-2">gen_server:terminate/2</a>
 -spec terminate(Reason, State :: term()) -> Any :: term() when
-	Reason :: normal
-			| shutdown
-			| {shutdown, term()}
-			| term().
+    Reason :: normal
+            | shutdown
+            | {shutdown, term()}
+            | term().
 %% ====================================================================
 terminate(_Reason, _State) ->
     ok.
@@ -161,9 +161,9 @@ terminate(_Reason, _State) ->
 %% ====================================================================
 %% @doc <a href="http://www.erlang.org/doc/man/gen_server.html#Module:code_change-3">gen_server:code_change/3</a>
 -spec code_change(OldVsn, State :: term(), Extra :: term()) -> Result when
-	Result :: {ok, NewState :: term()} | {error, Reason :: term()},
-	OldVsn :: Vsn | {down, Vsn},
-	Vsn :: term().
+    Result :: {ok, NewState :: term()} | {error, Reason :: term()},
+    OldVsn :: Vsn | {down, Vsn},
+    Vsn :: term().
 %% ====================================================================
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
@@ -176,12 +176,12 @@ create_ets_table(TableName, Options, ETSProprty)
   when is_atom(TableName), is_list(Options), is_list(ETSProprty)->
     case is_exist_ets_table(TableName) of
         false->
-            {new,ets:new(TableName, ETSProprty)};
+            {new, ets_mgr:soft_new(TableName, ETSProprty)};
         true->
             case proplists:get_value(mode, Options, ETSProprty) of 
                 overwrite->
                     ets:delete(TableName),
-                    {new,ets:new(TableName,ETSProprty)};
+                    {new, ets_mgr:soft_new(TableName,ETSProprty)};
                 _->
                     {old,TableName}
             end

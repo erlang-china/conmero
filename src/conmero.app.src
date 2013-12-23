@@ -17,11 +17,11 @@
 {application, conmero,
     [
         {description,"consistent hashing message router"},
-        {vsn,"2.0.0"},
+        {vsn,"2.1.0"},
         {modules,[]},
         {registered,[conmero]},
         {applications, [ kernel, stdlib ]},
         {mod, {conmero_app, []}},
-        {env,[{config,"/etc/conmero.config"}]}
+        {env,[{config,"etc/conmero.config"}]}
     ]
 }.

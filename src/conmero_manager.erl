@@ -46,13 +46,13 @@ stop() ->
 %% ====================================================================
 %% @doc <a href="http://www.erlang.org/doc/man/gen_server.html#Module:init-1">gen_server:init/1</a>
 -spec init(Args :: term()) -> Result when
-	Result :: {ok, State}
-			| {ok, State, Timeout}
-			| {ok, State, hibernate}
-			| {stop, Reason :: term()}
-			| ignore,
-	State :: term(),
-	Timeout :: non_neg_integer() | infinity.
+    Result :: {ok, State}
+            | {ok, State, Timeout}
+            | {ok, State, hibernate}
+            | {stop, Reason :: term()}
+            | ignore,
+    State :: term(),
+    Timeout :: non_neg_integer() | infinity.
 %% ====================================================================
 init([]) ->
     load_config(),
@@ -63,18 +63,18 @@ init([]) ->
 %% ====================================================================
 %% @doc <a href="http://www.erlang.org/doc/man/gen_server.html#Module:handle_call-3">gen_server:handle_call/3</a>
 -spec handle_call(Request :: term(), From :: {pid(), Tag :: term()}, State :: term()) -> Result when
-	Result :: {reply, Reply, NewState}
-			| {reply, Reply, NewState, Timeout}
-			| {reply, Reply, NewState, hibernate}
-			| {noreply, NewState}
-			| {noreply, NewState, Timeout}
-			| {noreply, NewState, hibernate}
-			| {stop, Reason, Reply, NewState}
-			| {stop, Reason, NewState},
-	Reply :: term(),
-	NewState :: term(),
-	Timeout :: non_neg_integer() | infinity,
-	Reason :: term().
+    Result :: {reply, Reply, NewState}
+            | {reply, Reply, NewState, Timeout}
+            | {reply, Reply, NewState, hibernate}
+            | {noreply, NewState}
+            | {noreply, NewState, Timeout}
+            | {noreply, NewState, hibernate}
+            | {stop, Reason, Reply, NewState}
+            | {stop, Reason, NewState},
+    Reply :: term(),
+    NewState :: term(),
+    Timeout :: non_neg_integer() | infinity,
+    Reason :: term().
 %% ====================================================================
 handle_call(load_config, _From, State) ->
     Reply = load_config(),
@@ -88,12 +88,12 @@ handle_call(_Request, _From, State) ->
 %% ====================================================================
 %% @doc <a href="http://www.erlang.org/doc/man/gen_server.html#Module:handle_cast-2">gen_server:handle_cast/2</a>
 -spec handle_cast(Request :: term(), State :: term()) -> Result when
-	Result :: {noreply, NewState}
-			| {noreply, NewState, Timeout}
-			| {noreply, NewState, hibernate}
-			| {stop, Reason :: term(), NewState},
-	NewState :: term(),
-	Timeout :: non_neg_integer() | infinity.
+    Result :: {noreply, NewState}
+            | {noreply, NewState, Timeout}
+            | {noreply, NewState, hibernate}
+            | {stop, Reason :: term(), NewState},
+    NewState :: term(),
+    Timeout :: non_neg_integer() | infinity.
 %% ====================================================================
 handle_cast(_Msg, State) ->
     {noreply, State}.
@@ -103,12 +103,12 @@ handle_cast(_Msg, State) ->
 %% ====================================================================
 %% @doc <a href="http://www.erlang.org/doc/man/gen_server.html#Module:handle_info-2">gen_server:handle_info/2</a>
 -spec handle_info(Info :: timeout | term(), State :: term()) -> Result when
-	Result :: {noreply, NewState}
-			| {noreply, NewState, Timeout}
-			| {noreply, NewState, hibernate}
-			| {stop, Reason :: term(), NewState},
-	NewState :: term(),
-	Timeout :: non_neg_integer() | infinity.
+    Result :: {noreply, NewState}
+            | {noreply, NewState, Timeout}
+            | {noreply, NewState, hibernate}
+            | {stop, Reason :: term(), NewState},
+    NewState :: term(),
+    Timeout :: non_neg_integer() | infinity.
 %% ====================================================================
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -118,10 +118,10 @@ handle_info(_Info, State) ->
 %% ====================================================================
 %% @doc <a href="http://www.erlang.org/doc/man/gen_server.html#Module:terminate-2">gen_server:terminate/2</a>
 -spec terminate(Reason, State :: term()) -> Any :: term() when
-	Reason :: normal
-			| shutdown
-			| {shutdown, term()}
-			| term().
+    Reason :: normal
+            | shutdown
+            | {shutdown, term()}
+            | term().
 %% ====================================================================
 terminate(_Reason, _State) ->
     ok.
@@ -131,9 +131,9 @@ terminate(_Reason, _State) ->
 %% ====================================================================
 %% @doc <a href="http://www.erlang.org/doc/man/gen_server.html#Module:code_change-3">gen_server:code_change/3</a>
 -spec code_change(OldVsn, State :: term(), Extra :: term()) -> Result when
-	Result :: {ok, NewState :: term()} | {error, Reason :: term()},
-	OldVsn :: Vsn | {down, Vsn},
-	Vsn :: term().
+    Result :: {ok, NewState :: term()} | {error, Reason :: term()},
+    OldVsn :: Vsn | {down, Vsn},
+    Vsn :: term().
 %% ====================================================================
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
@@ -145,12 +145,13 @@ code_change(_OldVsn, State, _Extra) ->
 load_config()->
     {ok, Filename} = application:get_env(config),
     {ok, Terms}    = file:consult(Filename),
-    CallAlgorithmTypeList   = proplists:get_value(call_algorithm_type, Terms),
+    ConmeroConfigs = proplists:get_value(conmero, Terms),
+    CallAlgorithmTypeList = proplists:get_value(call_algorithm_type, ConmeroConfigs),
     [begin
-         AppsList = proplists:get_value(CallAlgorithmType, Terms),
-         init_apps(CallAlgorithmType, Terms, AppsList)
+         AppsList = proplists:get_value(CallAlgorithmType, ConmeroConfigs),
+         init_apps(CallAlgorithmType, ConmeroConfigs, AppsList)
      end
-    || CallAlgorithmType<-CallAlgorithmTypeList].
+    || CallAlgorithmType <- CallAlgorithmTypeList].
 
 init_apps(_CallAlgorithmType,_Terms, [])->ok;
 init_apps(_CallAlgorithmType,_Terms, undefined)->ok;
@@ -169,7 +170,7 @@ insert_app_into_ets(CallAlgorithmType, App, ServerNodes)->
 
 generate_app(_CallAlgorithmType, App, undefined)->
     #conmero_app_info{application = App};
-generate_app( CallAlgorithmType, App, [])->
+generate_app(CallAlgorithmType, App, [])->
     generate_app(CallAlgorithmType, App, undefined);
 
 generate_app(direct, App, [ServerNode|T])->
@@ -183,89 +184,103 @@ generate_app(consistent, App, ServerNodes)->
     NodeTableName = conmero_app_table:create_node_table(App),
     AppNodeConfig = generate_consistent_app_node(App, ServerNodes, []),
 
-    ets:insert(NodeTableName,AppNodeConfig),
+    ets:insert(NodeTableName, AppNodeConfig),
     #conmero_app_info{
         application         = App,
         call_algorithm_type = 1}.
 
 generate_direct_app(App, ServerNode)->
-    ModSender       = proplists:get_value(mod_sender,      ServerNode),
-    MasterNode      = proplists:get_value(master_node,     ServerNode),
-    SlaveNodeTmp    = proplists:get_value(slave_node,      ServerNode),
-    Timeout         = proplists:get_value(timeout,         ServerNode),
-    NodeTag         = proplists:get_value(node_tag,        ServerNode),
-    NodeStatusTmp   = proplists:get_value(node_status,     ServerNode),
-    NodeSwitchTmp   = proplists:get_value(switch_to_slave, ServerNode),
+    case proplists:get_value(node_status, ServerNode) of
+        online -> 
+            ModSender     = proplists:get_value(mod_sender,      ServerNode),
+            MasterNode    = proplists:get_value(master_node,     ServerNode),
+            SlaveNodeTmp  = proplists:get_value(slave_node,      ServerNode),
+            Timeout       = proplists:get_value(timeout,         ServerNode),
+            NodeTag       = proplists:get_value(node_tag,        ServerNode),
+            NodeSwitchTmp = proplists:get_value(switch_to_slave, ServerNode),
+            NodeSwitch    = get_int_TorF(NodeSwitchTmp, on),
 
-    NodeStatus      = get_int_TorF(NodeStatusTmp,online),
-    NodeSwitch      = get_int_TorF(NodeSwitchTmp,on),
-
-    {SyncFun,ASysnFun} = get_sender_functions(ModSender),
-    SlaveNode=
-    case SlaveNodeTmp of
-        undefined ->
-            MasterNode;
-        _->
-            SlaveNodeTmp
-    end,
-
-    #conmero_app_info{
-                        application         = App,
-                        call_algorithm_type = 0,
-                        master_node         = MasterNode,
-                        slave_node          = SlaveNode,
-                        sync_func           = SyncFun,
-                        async_func          = ASysnFun,
-                        timeout             = Timeout,
-                        switch_to_slave     = NodeSwitch,
-                        node_tag            = NodeTag,
-                        node_status         = NodeStatus}.
+            {SyncFun, ASysnFun} = get_sender_functions(ModSender),
+            SlaveNode =
+                case SlaveNodeTmp of
+                    undefined ->
+                        MasterNode;
+                    _->
+                        SlaveNodeTmp
+                end,
+            #conmero_app_info{
+                    application         = App,
+                    call_algorithm_type = 0,
+                    master_node         = MasterNode,
+                    slave_node          = SlaveNode,
+                    sync_func           = SyncFun,
+                    async_func          = ASysnFun,
+                    timeout             = Timeout,
+                    switch_to_slave     = NodeSwitch,
+                    node_tag            = NodeTag};
+        _ ->
+            []
+    end.
 
 generate_consistent_app_node(_App, [], AccOut)->AccOut;
 generate_consistent_app_node( App, [ServerNode|T], AccIn)->
-    Id              = proplists:get_value(id,              ServerNode),
-    ModSender       = proplists:get_value(mod_sender,      ServerNode),
-    MasterNode      = proplists:get_value(master_node,     ServerNode),
-    SlaveNodeTmp    = proplists:get_value(slave_node,      ServerNode),
-    Timeout         = proplists:get_value(timeout,         ServerNode),
-    VNodeNums       = proplists:get_value(v_node_num,      ServerNode),
-    HashBaseKey     = proplists:get_value(hash_base_key,   ServerNode),
-    NodeTag         = proplists:get_value(node_tag,        ServerNode),
-    NodeStatusTmp   = proplists:get_value(node_status,     ServerNode),
-    NodeSwitchTmp   = proplists:get_value(switch_to_slave, ServerNode),
-
-    NodeStatus      = get_int_TorF(NodeStatusTmp,online),
-    NodeSwitch      = get_int_TorF(NodeSwitchTmp,on),
-
-    SlaveNode=
-    case SlaveNodeTmp of
-        undefined ->
-            MasterNode;
-        _->
-            SlaveNodeTmp
-    end,
-
-    ConmeroNodes =
-        make_nodes(App, Id, ModSender, MasterNode, SlaveNode, NodeSwitch, Timeout, VNodeNums, HashBaseKey, NodeTag, NodeStatus),
-    generate_consistent_app_node(App, T, lists:append([ConmeroNodes,AccIn])).
+    case proplists:get_value(node_status, ServerNode) of
+        online -> 
+            Id            = proplists:get_value(id,              ServerNode),
+            ModSender     = proplists:get_value(mod_sender,      ServerNode),
+            MasterNode    = proplists:get_value(master_node,     ServerNode),
+            SlaveNodeTmp  = proplists:get_value(slave_node,      ServerNode),
+            Timeout       = proplists:get_value(timeout,         ServerNode),
+            VNodeNums     = proplists:get_value(v_node_num,      ServerNode),
+            HashBaseKey   = proplists:get_value(hash_base_key,   ServerNode),
+            NodeTag       = proplists:get_value(node_tag,        ServerNode),
+            NodeSwitchTmp = proplists:get_value(switch_to_slave, ServerNode),
+            SlaveNode =
+                case SlaveNodeTmp of
+                    undefined ->
+                        MasterNode;
+                    _->
+                        SlaveNodeTmp
+                end,
+            NodeSwitch   = get_int_TorF(NodeSwitchTmp, on),
+            ConmeroNodes =
+                make_nodes(App, Id, ModSender, MasterNode, SlaveNode, NodeSwitch,
+                           Timeout, VNodeNums, HashBaseKey, NodeTag),
+            generate_consistent_app_node(App, T, lists:append(ConmeroNodes, AccIn));
+        _ ->
+            generate_consistent_app_node(App, T, AccIn)
+    end.
 
 get_int_TorF( F, S) when F=:=S->1;
 get_int_TorF(_F,_S) ->0.
 
-make_nodes( App, Id, ModSender, MasterNode, SlaveNode, NodeSwitch, Timeout, VNodeNums, HashBaseKey, NodeTag, NodeStatus)
-  when is_atom(App),is_integer(Id),is_integer(NodeSwitch),is_integer(Timeout),is_integer(VNodeNums),VNodeNums>0,is_list(NodeTag),is_integer(NodeStatus)->
-    make_nodes_1(App,Id,ModSender,MasterNode,SlaveNode,NodeSwitch,Timeout,0,VNodeNums,HashBaseKey,NodeTag,NodeStatus,[]);
-make_nodes(_App,_Id,_ModSender,_MasterNode,_SlaveNode,_NodeSwitch,_Timeout,_VNodeNums,_HashBaseKey,_NodeTag,_NodeStatus)->
+make_nodes( App, Id, ModSender, MasterNode, SlaveNode, NodeSwitch,
+            Timeout, VNodeNums, HashBaseKey, NodeTag)
+        when is_atom(App),
+             is_integer(Id),
+             is_integer(NodeSwitch),
+             is_integer(Timeout),
+             is_integer(VNodeNums), VNodeNums > 0,
+             is_list(NodeTag)->
+    make_nodes_1(App,Id, ModSender, MasterNode, SlaveNode, NodeSwitch,
+                 Timeout, 0, VNodeNums, HashBaseKey, NodeTag, []);
+make_nodes( _App,_Id,_ModSender,_MasterNode,_SlaveNode,_NodeSwitch,
+            _Timeout,_VNodeNums,_HashBaseKey,_NodeTag)->
     [].
 
-make_nodes_1(_App,_Id,_ModSender,_MasterNode,_SlaveNode,_NodeSwitch,_Timeout,_BaseVNode, 0,        _HashBaseKey,_NodeTag,_NodeStatus, AccOut)-> AccOut;
-make_nodes_1(_App,_Id,_ModSender,_MasterNode,_SlaveNode,_NodeSwitch,_Timeout, BaseVNode, VNodeId,_HashBaseKey,_NodeTag,_NodeStatus, AccOut) 
-  when BaseVNode==VNodeId -> AccOut;
-make_nodes_1( App, Id, ModSender, MasterNode, SlaveNode, NodeSwitch, Timeout, BaseVNode, VNodeId, HashBaseKey, NodeTag, NodeStatus, AccOut)->
+make_nodes_1(_App,_Id,_ModSender,_MasterNode,_SlaveNode,_NodeSwitch,
+             _Timeout,_BaseVNode, 0,_HashBaseKey,_NodeTag, AccOut)->
+    AccOut;
+make_nodes_1(_App,_Id,_ModSender,_MasterNode,_SlaveNode,_NodeSwitch,
+             _Timeout, BaseVNode, VNodeId,_HashBaseKey,_NodeTag, AccOut) 
+        when BaseVNode == VNodeId ->
+    AccOut;
+make_nodes_1( App, Id, ModSender, MasterNode, SlaveNode, NodeSwitch,
+              Timeout, BaseVNode, VNodeId, HashBaseKey, NodeTag, AccOut)->
 
-    Key                = io_lib:format("~s:~b",[HashBaseKey,VNodeId]),
-    KeyHash            = get_key_hash(Key),
-    {SyncFun,ASysnFun} = get_sender_functions(ModSender),
+    Key                 = io_lib:format("~s:~b", [HashBaseKey, VNodeId]),
+    KeyHash             = get_key_hash(Key),
+    {SyncFun, ASysnFun} = get_sender_functions(ModSender),
     NodeRec = #conmero_app_node{
                     id              = Id,
                     application     = App,
@@ -277,24 +292,19 @@ make_nodes_1( App, Id, ModSender, MasterNode, SlaveNode, NodeSwitch, Timeout, Ba
                     switch_to_slave = NodeSwitch,
                     v_node_id       = VNodeId,
                     hash_index      = KeyHash,
-                    node_tag        = NodeTag,
-                    node_status     = NodeStatus},
-    make_nodes_1(App, Id, ModSender, MasterNode, SlaveNode, NodeSwitch, Timeout, BaseVNode, VNodeId-1, HashBaseKey, NodeTag, NodeStatus, [NodeRec|AccOut]).
+                    node_tag        = NodeTag},
+    make_nodes_1(App, Id, ModSender, MasterNode, SlaveNode, NodeSwitch, Timeout,
+                 BaseVNode, VNodeId-1, HashBaseKey, NodeTag, [NodeRec | AccOut]).
 
 
 get_sender_functions([])->get_sender_functions(undefined);
-get_sender_functions(undefined)->{undefined,undefined};
+get_sender_functions(undefined)->{undefined, undefined};
 get_sender_functions(Sender)->
-    {fun Sender:call/3,fun Sender:cast/2}.
+    {fun Sender:call/3, fun Sender:cast/2}.
 
 
 get_key_hash(Key)->
     ByteKeyHash                 = erlang:md5(Key),
     <<KeyHash:32/big,_/binary>> = ByteKeyHash,
     KeyHash.
-
-
-
-
-
 
